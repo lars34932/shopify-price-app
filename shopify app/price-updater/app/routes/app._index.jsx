@@ -15,6 +15,7 @@ import {
 import enTranslations from "@shopify/polaris/locales/en.json";
 import "@shopify/polaris/build/esm/styles.css";
 import { authenticate } from "../shopify.server";
+import { fetchStockXData } from "../stockx.server";
 
 // --- BACKEND ACTION ---
 export const action = async ({ request }) => {
@@ -28,16 +29,22 @@ export const action = async ({ request }) => {
   if (!skuInput) return { status: "error", message: "Please enter a SKU." };
 
   try {
-    // 1. Fetch data from your API
-    const apiResponse = await fetch("https://sku-price.onrender.com/api/prices", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sku: skuInput }),
-    });
+    // 1. Fetch data from INTERNAL StockX Logic
+    // We pass the app URL for the auth redirect link if needed
+    const appUrl = process.env.SHOPIFY_APP_URL || "";
+    const result = await fetchStockXData(skuInput, appUrl);
 
-    if (!apiResponse.ok) return { status: "error", message: "Failed to fetch data from API." };
-    const data = await apiResponse.json();
+    if (result.status === 401) {
+      return { status: "error", message: result.action || "Unauthorized" };
+    }
 
+    if (result.status !== 200) {
+      return { status: "error", message: result.error || "Failed to fetch data." };
+    }
+
+    const data = result.data;
+
+    // Validation (should be covered by fetchStockXData but good to be safe)
     if (!data?.product_info || !data?.variants) {
       return { status: "error", message: "Product not found or invalid API response." };
     }
