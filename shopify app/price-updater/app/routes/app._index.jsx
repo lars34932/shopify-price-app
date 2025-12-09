@@ -17,7 +17,7 @@ import "@shopify/polaris/build/esm/styles.css";
 import { authenticate } from "../shopify.server";
 import { fetchStockXData } from "../stockx.server";
 
-// --- BACKEND ACTION ---
+import { updateShopifyProduct, calculateMarkupPrice } from "../shopify.sync";
 export const action = async ({ request }) => {
   const { admin } = await authenticate.admin(request);
 
@@ -56,7 +56,7 @@ export const action = async ({ request }) => {
 
       return {
         options: [v.size_eu],
-        price: rawPrice.toFixed(2),
+        price: calculateMarkupPrice(rawPrice),
         sku: `${data.product_info.sku}-${v.size_eu.replace(/\s/g, "")}`,
         // Set inventory management to Shopify (tracks quantity)
         inventoryManagement: "SHOPIFY"

@@ -116,19 +116,18 @@ export async function fetchStockXData(sku, baseUrl) {
         });
         const variants = await variantsResp.json();
 
-        // 4. Get Prices in PARALLEL (with Concurrency Limit)
-        // Concurrency limit to respect rate limits (e.g., 5 concurrent requests)
-        const CONCURRENCY_LIMIT = 5;
-        const results = [];
+        // 4. Get Prices SEQUENTIALLY (Reliable Mode)
+        const variantPrices = [];
+        console.log(`Found ${variants.length} variants. Fetching prices sequentially...`);
 
-        // Helper to process a variant
-        const processVariant = async (variant) => {
+        for (const variant of variants) {
             let euSize = variant.sizeChart?.availableConversions?.find(c => c.type === 'eu')?.size || "N/A";
             let usSize = variant.sizeChart?.defaultConversion?.size || "N/A";
             let priceData = "No Ask";
 
             try {
                 const marketUrl = `https://api.stockx.com/v2/catalog/products/${currentProductId}/variants/${variant.variantId}/market-data?currencyCode=EUR`;
+                // Add tiny jitter to delay to look more human if desired, but fixed 100ms is requested
 
                 const marketResp = await fetch(marketUrl, {
                     headers: { 'x-api-key': API_KEY, 'Authorization': `Bearer ${accessToken}` }
@@ -140,37 +139,27 @@ export async function fetchStockXData(sku, baseUrl) {
                     if (ask) priceData = `${ask} EUR`;
                 }
             } catch (err) {
-                console.error(`Error fetching size ${usSize}:`, err.message);
+                // Silent fail or log
+                // console.error(`Error fetching size ${usSize}:`, err.message);
             }
 
-            return {
+            variantPrices.push({
                 size_eu: euSize,
                 size_us: usSize,
                 price: priceData,
                 variantId: variant.variantId
-            };
-        };
+            });
 
-        // Simple chunking for concurrency
-        for (let i = 0; i < variants.length; i += CONCURRENCY_LIMIT) {
-            const chunk = variants.slice(i, i + CONCURRENCY_LIMIT);
-            const chunkResults = await Promise.all(chunk.map(v => processVariant(v)));
-            results.push(...chunkResults);
-
-            // Small delay between chunks to be polite
-            if (i + CONCURRENCY_LIMIT < variants.length) {
-                await new Promise(r => setTimeout(r, 100));
-            }
+            // 100ms delay as requested for reliability
+            await new Promise(r => setTimeout(r, 100));
         }
-
-        const variantPrices = results;
 
         return {
             status: 200,
             data: {
                 product_info: {
                     title: product.title,
-                    sku: cleanSku
+                    sku: product.styleId || product.sku || cleanSku
                 },
                 variants: variantPrices
             }
