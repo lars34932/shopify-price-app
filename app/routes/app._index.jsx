@@ -74,12 +74,14 @@ export default function Index() {
         }
 
         if (fetchData.status !== "success") {
-          // AUTO-LOGIN REDIRECT
+          // AUTH REQUIRED
           if (fetchData.loginUrl) {
-            setResults(prev => ({ ...prev, failed: [...prev.failed, `${sku}: Authentication Required. Redirecting to login...`] }));
-            window.open(fetchData.loginUrl, '_blank');
+            setResults(prev => ({
+              ...prev,
+              failed: [...prev.failed, `AUTH_REQUIRED:${fetchData.loginUrl}`] // Special flag for UI
+            }));
             setIsImporting(false);
-            return; // Stop the loop immediately
+            return;
           }
 
           setResults(prev => ({ ...prev, failed: [...prev.failed, `${sku}: ${fetchData.message}`] }));
@@ -159,13 +161,31 @@ export default function Index() {
                   </Banner>
                 )}
 
-                {results.failed.length > 0 && !isImporting && (
-                  <Banner tone="warning" title="Some Imports Failed">
-                    <p>Failed to import {results.failed.length} products.</p>
-                    <ul>
-                      {results.failed.map((s, i) => <li key={i}>{s}</li>)}
-                    </ul>
+                {results.failed.some(f => f.startsWith("AUTH_REQUIRED:")) ? (
+                  <Banner tone="critical" title="StockX Connection Required">
+                    <p>The app needs to reconnect to StockX to continue.</p>
+                    <BlockStack gap="200">
+                      <Button
+                        variant="primary"
+                        onClick={() => {
+                          const url = results.failed.find(f => f.startsWith("AUTH_REQUIRED:")).split("AUTH_REQUIRED:")[1];
+                          window.open(url, "stockx_auth", "width=600,height=700");
+                        }}
+                      >
+                        Connect to StockX
+                      </Button>
+                      <Text as="p">After connecting (and the popup closes), please click "Start Bulk Import" again.</Text>
+                    </BlockStack>
                   </Banner>
+                ) : (
+                  results.failed.length > 0 && !isImporting && (
+                    <Banner tone="warning" title="Some Imports Failed">
+                      <p>Failed to import {results.failed.length} products.</p>
+                      <ul>
+                        {results.failed.map((s, i) => <li key={i}>{s}</li>)}
+                      </ul>
+                    </Banner>
+                  )
                 )}
 
                 <Text as="p" variant="bodyMd">

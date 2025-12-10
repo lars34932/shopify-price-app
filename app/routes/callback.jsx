@@ -19,7 +19,7 @@ export const loader = async ({ request }) => {
     const result = await exchangeCodeForToken(code, `${BASE_URL}/callback`);
 
     if (result.success) {
-        return new Response('<h1>Authorized!</h1><p>You can now go back to the app and send POST requests.</p>', {
+        return new Response('<html><body><h1>Authorized!</h1><p>Closing window...</p><script>window.close();</script></body></html>', {
             headers: { "Content-Type": "text/html" }
         });
     } else {
