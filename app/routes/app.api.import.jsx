@@ -139,7 +139,8 @@ async function createShopifyProductFromData(admin, data) {
                                 name: "Size (EU)",
                                 values: sizeValues
                             }
-                        ]
+                        ],
+                        tags: ["stockx-sync"]
                     },
                     media: mediaInput
                 },
@@ -303,7 +304,11 @@ export const action = async ({ request }) => {
 
             const result = await fetchStockXData(sku, appUrl);
 
-            if (result.status === 401) return jsonResponse({ status: "error", message: result.action || "Unauthorized" });
+            if (result.status === 401) return jsonResponse({
+                status: "error",
+                message: result.action || "Unauthorized",
+                loginUrl: result.loginUrl
+            });
             if (result.status !== 200) return jsonResponse({ status: "error", message: result.error || "Failed to fetch data." });
 
             const data = result.data;

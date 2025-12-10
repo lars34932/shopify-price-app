@@ -74,6 +74,14 @@ export default function Index() {
         }
 
         if (fetchData.status !== "success") {
+          // AUTO-LOGIN REDIRECT
+          if (fetchData.loginUrl) {
+            setResults(prev => ({ ...prev, failed: [...prev.failed, `${sku}: Authentication Required. Redirecting to login...`] }));
+            window.open(fetchData.loginUrl, '_blank');
+            setIsImporting(false);
+            return; // Stop the loop immediately
+          }
+
           setResults(prev => ({ ...prev, failed: [...prev.failed, `${sku}: ${fetchData.message}`] }));
           continue;
         }

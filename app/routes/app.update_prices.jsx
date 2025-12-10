@@ -29,7 +29,7 @@ export const loader = async ({ request }) => {
   const response = await admin.graphql(
     `#graphql
     query getProducts {
-      products(first: 50, sortKey: TITLE) {
+      products(first: 50, query: "tag:stockx-sync", sortKey: TITLE) {
         nodes {
           id
           title

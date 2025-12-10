@@ -13,43 +13,67 @@ const TOKEN_PATH = process.platform === 'win32'
 let accessToken = null;
 let refreshToken = null;
 
+import prisma from "./db.server";
+
+// ... (constants remain)
+
 // --- HELPER FUNCTIONS ---
-const saveToken = (tokenData) => {
+const saveToken = async (tokenData) => {
     try {
-        // Merge with existing data to preserve refresh_token if the new response doesn't have one
-        let existingData = {};
-        if (fs.existsSync(TOKEN_PATH)) {
-            try {
-                existingData = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
-            } catch (e) { /* ignore */ }
+        const data = {
+            accessToken: tokenData.access_token,
+            refreshToken: tokenData.refresh_token || undefined, // undefined prevents overwriting with null if missing
+            expiresIn: tokenData.expires_in,
+        };
+
+        // Upsert: Create if not exists, update if exists (we assume ID 1 for simplicity or singleton)
+        // Since we don't have a unique key other than ID, we'll use findFirst/update or deleteMany/create
+        // Better: Upsert on a fixed ID if possible, but ID is autoincrement.
+        // Simplest: Find first, if exists update, else create.
+
+        const existing = await prisma.stockxCredential.findFirst();
+        if (existing) {
+            await prisma.stockxCredential.update({
+                where: { id: existing.id },
+                data: data
+            });
+        } else {
+            await prisma.stockxCredential.create({
+                data: {
+                    ...data,
+                    refreshToken: data.refreshToken || "" // Ensure string if creating
+                }
+            });
         }
 
-        const newData = { ...existingData, ...tokenData };
+        accessToken = data.accessToken;
+        if (data.refreshToken) refreshToken = data.refreshToken;
 
-        fs.writeFileSync(TOKEN_PATH, JSON.stringify(newData));
-        accessToken = newData.access_token;
-        if (newData.refresh_token) {
-            refreshToken = newData.refresh_token;
-        }
     } catch (e) {
-        console.error("Error saving token:", e);
+        console.error("Error saving token to DB:", e);
     }
 };
 
-const loadToken = () => {
+const loadToken = async () => {
     if (accessToken && refreshToken) return true;
-    if (fs.existsSync(TOKEN_PATH)) {
-        try {
-            const data = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
-            accessToken = data.access_token;
-            refreshToken = data.refresh_token;
-            return !!accessToken;
-        } catch (e) {
-            return false;
+
+    try {
+        const cred = await prisma.stockxCredential.findFirst({
+            orderBy: { updatedAt: 'desc' }
+        });
+
+        if (cred) {
+            accessToken = cred.accessToken;
+            refreshToken = cred.refreshToken;
+            return true;
         }
+    } catch (e) {
+        console.error("Error loading token from DB:", e);
     }
     return false;
 };
+
+// --- CORE FUNCTIONS ---
 
 // --- CORE FUNCTIONS ---
 
@@ -68,7 +92,7 @@ export async function exchangeCodeForToken(code, redirectUri) {
 
     const tokenData = await tokenResponse.json();
     if (tokenResponse.ok) {
-        saveToken(tokenData);
+        await saveToken(tokenData);
         return { success: true, tokenData };
     } else {
         console.error("Token Exchange Error:", tokenData);
@@ -77,7 +101,7 @@ export async function exchangeCodeForToken(code, redirectUri) {
 }
 
 async function refreshAccessToken() {
-    loadToken(); // Ensure we have the latest
+    await loadToken(); // Ensure we have the latest
     if (!refreshToken) {
         console.error("No refresh token available");
         return false;
@@ -98,7 +122,7 @@ async function refreshAccessToken() {
         const tokenData = await tokenResponse.json();
         if (tokenResponse.ok) {
             console.log("Token successfully refreshed");
-            saveToken(tokenData);
+            await saveToken(tokenData);
             return true;
         } else {
             console.error("Token Refresh Error:", tokenData);
@@ -116,7 +140,7 @@ export async function fetchStockXData(sku, baseUrl) {
     if (!cleanSku) throw new Error("Missing 'sku'");
 
     // 1. Auth Check
-    loadToken();
+    await loadToken();
 
     // Auto-login logic
     if (!accessToken) {
@@ -126,7 +150,8 @@ export async function fetchStockXData(sku, baseUrl) {
             return {
                 status: 401,
                 error: 'Unauthorized',
-                action: `Please visit ${baseUrl}/stockx/login to authenticate first.`
+                action: `Please visit ${baseUrl}/stockx/login to authenticate first.`,
+                loginUrl: `${baseUrl}/stockx/login`
             };
         }
     }
@@ -165,7 +190,8 @@ export async function fetchStockXData(sku, baseUrl) {
                         return {
                             status: 401,
                             error: "Token Expired and Refresh Failed. Please login again.",
-                            action: `Please visit ${baseUrl}/stockx/login to authenticate first.`
+                            action: `Please visit ${baseUrl}/stockx/login to authenticate first.`,
+                            loginUrl: `${baseUrl}/stockx/login`
                         };
                     }
                 }
