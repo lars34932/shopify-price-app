@@ -5,6 +5,9 @@ name = "price updater"
 application_url = "https://shopify-price-app.onrender.com"
 embedded = true
 
+[build]
+automatically_update_urls_on_dev = false
+
 [webhooks]
 api_version = "2026-01"
 
@@ -18,6 +21,3 @@ redirect_urls = [
   "https://shopify-price-app.onrender.com/auth/shopify/callback",
   "https://shopify-price-app.onrender.com/api/auth/callback"
 ]
-
-[build]
-automatically_update_urls_on_dev = false
