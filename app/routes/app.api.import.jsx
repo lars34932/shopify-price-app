@@ -38,101 +38,117 @@ async function createShopifyProductFromData(admin, data) {
     const brand = data.product_info.brand;
     let existingCollection = null;
 
-    if (!brand) {
-        console.log("Brand missing: brand data not found in StockX response.");
+    if (!brand || typeof brand !== 'string') {
+        console.log("Brand missing or invalid: brand data not found in StockX response.");
     } else {
         // Check if collection exists
-        const collectionQuery = await admin.graphql(
-            `#graphql
-          query collections($query: String!) {
-            collections(first: 1, query: $query) {
-              edges { 
-                node { 
-                  id
-                  title
-                  ruleSet {
-                    rules {
-                      column
-                    }
-                  }
-                } 
-              }
-            }
-          }`,
-            { variables: { query: `title:${brand}` } }
-        );
-        const collectionJson = await collectionQuery.json();
-        existingCollection = collectionJson.data?.collections?.edges?.[0]?.node;
-
-        if (existingCollection) {
-            console.log(`Brand collection exists: ${brand}`);
-        } else {
-            console.log(`Brand collection missing, adding: ${brand}`);
-            // Create Smart Collection for Brand
-            await admin.graphql(
+        try {
+            const collectionQuery = await admin.graphql(
                 `#graphql
-             mutation collectionCreate($input: CollectionInput!) {
-               collectionCreate(input: $input) {
-                 collection { id }
-                 userErrors { field, message }
-               }
-             }`,
-                {
-                    variables: {
-                        input: {
-                            title: brand,
-                            ruleSet: {
-                                appliedDisjunctively: false,
-                                rules: [{ column: "VENDOR", relation: "EQUALS", condition: brand }]
+              query collections($query: String!) {
+                collections(first: 1, query: $query) {
+                  edges { 
+                    node { 
+                      id
+                      title
+                      ruleSet {
+                        rules {
+                          column
+                        }
+                      }
+                    } 
+                  }
+                }
+              }`,
+                { variables: { query: `title:${brand}` } }
+            );
+            const collectionJson = await collectionQuery.json();
+            existingCollection = collectionJson.data?.collections?.edges?.[0]?.node;
+
+            if (existingCollection) {
+                console.log(`Brand collection exists: ${brand}`);
+            } else {
+                console.log(`Brand collection missing, adding: ${brand}`);
+                // Create Smart Collection for Brand
+                try {
+                    await admin.graphql(
+                        `#graphql
+                     mutation collectionCreate($input: CollectionInput!) {
+                       collectionCreate(input: $input) {
+                         collection { id }
+                         userErrors { field, message }
+                       }
+                     }`,
+                        {
+                            variables: {
+                                input: {
+                                    title: brand,
+                                    ruleSet: {
+                                        appliedDisjunctively: false,
+                                        rules: [{ column: "VENDOR", relation: "EQUALS", condition: brand }]
+                                    }
+                                }
                             }
                         }
-                    }
+                    );
+                    console.log(`Brand collection added: ${brand}`);
+                } catch (err) {
+                    console.error("Failed to create brand collection:", err);
+                    // Non-critical, continue
                 }
-            );
-            console.log(`Brand collection added: ${brand}`);
+            }
+        } catch (err) {
+            console.error("Collection Query Failed:", err);
+            // Non-critical
         }
     }
 
     const finalVendor = brand || "StockX Import";
 
     // --- STEP A: Create Product ---
-    const createResponse = await admin.graphql(
-        `#graphql
-      mutation productCreate($input: ProductInput!, $media: [CreateMediaInput!]) {
-        productCreate(input: $input, media: $media) {
-          product {
-            id
-            title
-            variants(first: 99) {
-              nodes {
+    let createResponse;
+    try {
+        createResponse = await admin.graphql(
+            `#graphql
+          mutation productCreate($input: ProductInput!, $media: [CreateMediaInput!]) {
+            productCreate(input: $input, media: $media) {
+              product {
                 id
-                price
-                inventoryItem { id }
-                selectedOptions { name, value }
+                title
+                variants(first: 99) {
+                  nodes {
+                    id
+                    price
+                    inventoryItem { id }
+                    selectedOptions { name, value }
+                  }
+                }
               }
+              userErrors { field, message }
             }
-          }
-          userErrors { field, message }
-        }
-      }`,
-        {
-            variables: {
-                input: {
-                    title: data.product_info.title,
-                    vendor: finalVendor,
-                    productType: "Sneakers",
-                    status: "ACTIVE",
-                    productOptions: [
-                        {
-                            name: "Size (EU)",
-                            values: sizeValues
-                        }
-                    ]
+          }`,
+            {
+                variables: {
+                    input: {
+                        title: data.product_info.title,
+                        vendor: finalVendor,
+                        productType: "Sneakers",
+                        status: "ACTIVE",
+                        productOptions: [
+                            {
+                                name: "Size (EU)",
+                                values: sizeValues
+                            }
+                        ]
+                    },
+                    media: mediaInput
                 },
-                media: mediaInput
-            },
-        }
-    );
+            }
+        );
+    } catch (err) {
+        console.error("Product Create Mutation Failed:", err);
+        throw new Error(`Product Create Failed: ${err.message}`);
+    }
 
     const createJson = await createResponse.json();
 
