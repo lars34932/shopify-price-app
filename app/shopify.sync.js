@@ -55,6 +55,11 @@ export async function updateShopifyProduct(admin, product, stockxData) {
       product(id: $id) {
         id
         title
+        options {
+          id
+          name
+          values
+        }
         variants(first: 200) {
           nodes {
             id
@@ -74,15 +79,32 @@ export async function updateShopifyProduct(admin, product, stockxData) {
     const currentVariants = currentProduct.variants.nodes;
     console.log(`[Shopify Sync] Fetched ${currentVariants.length} existing variants.`);
 
+    // DETERMINE THE OPTION NAME DYNAMICALLY
+    // We assume the first option is the "Size" option if not found explicitly
+    const productOptions = currentProduct.options || [];
+    let targetOptionName = "Size (EU)"; // Default fallback
+
+    if (productOptions.length > 0) {
+        // Try to find one named "Size" or "Size (EU)"
+        const sizeOpt = productOptions.find(o => o.name.includes("Size"));
+        if (sizeOpt) {
+            targetOptionName = sizeOpt.name;
+        } else {
+            // Otherwise just take the first one (e.g. "Title" for single-variant, or custom name)
+            targetOptionName = productOptions[0].name;
+        }
+    }
+    console.log(`[Shopify Sync] Using Option Name: "${targetOptionName}"`);
+
+
     // 3. Identify Missing Variants (to Create) AND Extra Variants (to Delete)
     const existingSizeValues = currentVariants.map(v =>
-        v.selectedOptions.find(opt => opt.name === "Size (EU)")?.value
+        v.selectedOptions.find(opt => opt.name === targetOptionName)?.value
     ).filter(Boolean);
 
     // Filter our source list to find ones that do NOT exist yet
-    const variantsToCreate = variantsForShopify.filter(v =>
-        !existingSizeValues.includes(v.options[0])
-    );
+    const variantsToCreate = variantsForShopify.map(v => ({ ...v })) // clone
+        .filter(v => !existingSizeValues.includes(v.options[0]));
 
     // Identify variants that exist in Shopify but NOT in the valid StockX list (No Ask)
     // We only delete variants if they belong to "Size (EU)" options.
@@ -90,9 +112,9 @@ export async function updateShopifyProduct(admin, product, stockxData) {
 
     // Find Shopify variants whose size is NOT in validNewSizes
     const variantsToDelete = currentVariants.filter(v => {
-        const sizeVal = v.selectedOptions.find(opt => opt.name === "Size (EU)")?.value;
+        const sizeVal = v.selectedOptions.find(opt => opt.name === targetOptionName)?.value;
         // If we found a size value, and it's NOT in our valid list, mark for deletion
-        return sizeVal && !validNewSizes.includes(sizeVal);
+        return sizeVal && !validNewSizes.includes(sizeVal) && sizeVal !== "Default Title";
     });
 
     if (variantsToDelete.length > 0) {
@@ -136,7 +158,7 @@ export async function updateShopifyProduct(admin, product, stockxData) {
         console.time(`Sync: Create Variants (${product.id})`);
         const variantsCreateInput = variantsToCreate.map(v => ({
             price: v.price,
-            optionValues: [{ optionName: "Size (EU)", name: v.options[0] }]
+            optionValues: [{ optionName: targetOptionName, name: v.options[0] }]
         }));
 
         const bulkCreateResponse = await admin.graphql(
@@ -172,7 +194,7 @@ export async function updateShopifyProduct(admin, product, stockxData) {
     // 5. Bulk Update Existing
     const allVariants = [...currentVariants, ...newlyCreatedVariants];
     const matchedVariants = allVariants.map((createdVariant) => {
-        const sizeOption = createdVariant.selectedOptions.find(opt => opt.name === "Size (EU)");
+        const sizeOption = createdVariant.selectedOptions.find(opt => opt.name === targetOptionName);
         const sizeValue = sizeOption ? sizeOption.value : null;
         const sourceVariant = variantsForShopify.find(v => v.options[0] === sizeValue);
         if (!sourceVariant) return null;
@@ -256,7 +278,7 @@ export async function updateShopifyProduct(admin, product, stockxData) {
     );
     const freshProductJson = await freshProductQuery.json();
     const freshOptions = freshProductJson.data?.product?.options || [];
-    const sizeOption = freshOptions.find(o => o.name === "Size (EU)");
+    const sizeOption = freshOptions.find(o => o.name === targetOptionName);
 
     if (sizeOption) {
         console.log("[Shopify Sync] Found option values to sort:", sizeOption.values);
