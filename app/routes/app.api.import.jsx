@@ -34,6 +34,67 @@ async function createShopifyProductFromData(admin, data) {
         ? [{ originalSource: data.product_info.image, mediaContentType: "IMAGE" }]
         : [];
 
+    // --- STEP 0: Ensure Collection Exists (Brand) ---
+    const brand = data.product_info.brand;
+    let existingCollection = null;
+
+    if (!brand) {
+        console.log("Brand missing: brand data not found in StockX response.");
+    } else {
+        // Check if collection exists
+        const collectionQuery = await admin.graphql(
+            `#graphql
+          query collections($query: String!) {
+            collections(first: 1, query: $query) {
+              edges { 
+                node { 
+                  id
+                  title
+                  ruleSet {
+                    rules {
+                      column
+                    }
+                  }
+                } 
+              }
+            }
+          }`,
+            { variables: { query: `title:${brand}` } }
+        );
+        const collectionJson = await collectionQuery.json();
+        existingCollection = collectionJson.data?.collections?.edges?.[0]?.node;
+
+        if (existingCollection) {
+            console.log(`Brand collection exists: ${brand}`);
+        } else {
+            console.log(`Brand collection missing, adding: ${brand}`);
+            // Create Smart Collection for Brand
+            await admin.graphql(
+                `#graphql
+             mutation collectionCreate($input: CollectionInput!) {
+               collectionCreate(input: $input) {
+                 collection { id }
+                 userErrors { field, message }
+               }
+             }`,
+                {
+                    variables: {
+                        input: {
+                            title: brand,
+                            ruleSet: {
+                                appliedDisjunctively: false,
+                                rules: [{ column: "VENDOR", relation: "EQUALS", condition: brand }]
+                            }
+                        }
+                    }
+                }
+            );
+            console.log(`Brand collection added: ${brand}`);
+        }
+    }
+
+    const finalVendor = brand || "StockX Import";
+
     // --- STEP A: Create Product ---
     const createResponse = await admin.graphql(
         `#graphql
@@ -58,7 +119,7 @@ async function createShopifyProductFromData(admin, data) {
             variables: {
                 input: {
                     title: data.product_info.title,
-                    vendor: "StockX Import",
+                    vendor: finalVendor,
                     productType: "Sneakers",
                     status: "ACTIVE",
                     productOptions: [
@@ -186,6 +247,28 @@ async function createShopifyProductFromData(admin, data) {
             }
         );
     }));
+
+    // --- STEP D: Add to Manual Collection (If applicable) ---
+    if (existingCollection && !existingCollection.ruleSet) {
+        // It's a manual collection, so we must explicitly add the product
+        console.log(`Adding product to Manual Collection: ${existingCollection.title}`);
+        await admin.graphql(
+            `#graphql
+            mutation collectionAddProducts($id: ID!, $productIds: [ID!]!) {
+              collectionAddProducts(id: $id, productIds: $productIds) {
+                userErrors { field, message }
+              }
+            }`,
+            {
+                variables: {
+                    id: existingCollection.id,
+                    productIds: [createdProduct.id]
+                }
+            }
+        );
+    } else if (existingCollection && existingCollection.ruleSet) {
+        console.log(`Product matches Smart Collection '${existingCollection.title}' via Vendor rule (automatic).`);
+    }
 
     return { status: "success", title: createdProduct.title };
 }

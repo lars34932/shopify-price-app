@@ -269,8 +269,22 @@ export async function fetchStockXData(sku, baseUrl) {
         // Concurrency Helper
         const limit = 5;
         const fetchVariantPrice = async (variant) => {
-            let euSize = variant.sizeChart?.availableConversions?.find(c => c.type === 'eu')?.size || "N/A";
-            let usSize = variant.sizeChart?.defaultConversion?.size || "N/A";
+            let euSize = variant.sizeChart?.availableConversions?.find(c => c.type === 'eu')?.size;
+            let usSize = variant.sizeChart?.defaultConversion?.size;
+
+            // Fallback for apparel which might defaults to US sizes
+            if (!euSize && usSize) {
+                euSize = usSize;
+            }
+
+            // Default to N/A if nothing found
+            if (!euSize) euSize = "N/A";
+            if (!usSize) usSize = "N/A";
+
+            // Clean "US " prefix if present (Requested by user)
+            // e.g., "US XS" -> "XS"
+            euSize = euSize.replace(/^US\s+/i, "");
+            usSize = usSize.replace(/^US\s+/i, "");
             let priceData = "No Ask";
 
             const maxRetries = 3;
@@ -348,7 +362,8 @@ export async function fetchStockXData(sku, baseUrl) {
                 product_info: {
                     title: product.title,
                     sku: product.styleId || product.sku || cleanSku,
-                    image: product.media?.imageUrl || product.media?.thumbUrl || product.image
+                    image: product.media?.imageUrl || product.media?.thumbUrl || product.image,
+                    brand: product.brand
                 },
                 variants: variantPrices
             }

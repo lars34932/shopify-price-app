@@ -13,7 +13,8 @@ import {
   InlineStack,
   Badge,
   Banner,
-  ProgressBar
+  ProgressBar,
+  TextField
 } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
 import "@shopify/polaris/build/esm/styles.css";
@@ -138,6 +139,9 @@ export default function UpdatePricesPage() {
   const nav = useNavigation();
   const submit = useSubmit();
 
+  // Search State
+  const [searchQuery, setSearchQuery] = useState("");
+
   // State to track which products are expanded
   const [expanded, setExpanded] = useState({});
 
@@ -158,7 +162,8 @@ export default function UpdatePricesPage() {
   };
 
   const handleUpdateAll = async () => {
-    if (products.length === 0) return;
+    const listToUpdate = searchQuery ? filteredProducts : products;
+    if (listToUpdate.length === 0) return;
 
     setIsUpdating(true);
     setProgress(0);
@@ -166,7 +171,7 @@ export default function UpdatePricesPage() {
 
     let successCount = 0;
     let failCount = 0;
-    const total = products.length;
+    const total = listToUpdate.length;
 
     // We can't use 'submit' easily in a loop because it cancels previous requests or handles nav.
     // We use raw fetch to the current URL.
@@ -210,8 +215,8 @@ export default function UpdatePricesPage() {
     };
 
     // Queue / Pool Manager
-    const queue = [...products];
-    const workers = Array(Math.min(products.length, CONCURRENCY)).fill(null).map(async () => {
+    const queue = [...listToUpdate];
+    const workers = Array(Math.min(listToUpdate.length, CONCURRENCY)).fill(null).map(async () => {
       while (queue.length > 0) {
         const p = queue.shift();
         await updateProduct(p);
@@ -231,21 +236,40 @@ export default function UpdatePricesPage() {
   const isNavLoading = nav.state === "submitting";
   const updatingProductId = isNavLoading && nav.formData?.get("productId");
 
+  // Filter Logic
+  const filteredProducts = products.filter((p) => {
+    const q = searchQuery.toLowerCase();
+    const titleMatch = p.title?.toLowerCase().includes(q);
+    const skuMatch = p.sku?.toLowerCase().includes(q);
+    return titleMatch || skuMatch;
+  });
+
   return (
     <AppProvider i18n={enTranslations}>
       <Page
         title="Update Prices"
         primaryAction={{
-          content: "Update prices for all",
+          content: `Update prices for ${searchQuery ? "visible" : "all"}`,
           onAction: handleUpdateAll,
           loading: isUpdating,
-          disabled: isNavLoading || isUpdating
+          disabled: isNavLoading || isUpdating || filteredProducts.length === 0
         }}
       >
         <Layout>
           <Layout.Section>
             <Card>
               <BlockStack gap="500">
+                {/* Search Bar */}
+                <TextField
+                  label="Search Products"
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  autoComplete="off"
+                  clearButton
+                  onClearButtonClick={() => setSearchQuery("")}
+                  placeholder="Search by Title or SKU"
+                />
+
                 {/* Result Banner from Single Update (Action Data) */}
                 {actionData?.status && !isUpdating && (
                   <Banner tone={actionData.status === "success" ? "success" : "critical"}>
@@ -264,20 +288,20 @@ export default function UpdatePricesPage() {
                 {isUpdating && (
                   <BlockStack gap="200">
                     <Text as="p" variant="bodyMd">
-                      Updating {products.length} products... {Math.round(progress)}%
+                      Updating {filteredProducts.length} products... {Math.round(progress)}%
                     </Text>
                     <ProgressBar progress={progress} tone="primary" />
                   </BlockStack>
                 )}
 
-                {products.length === 0 ? (
+                {filteredProducts.length === 0 ? (
                   <BlockStack align="center" inlineAlign="center">
                     <Text tone="subdued">No products found.</Text>
                   </BlockStack>
                 ) : (
                   <BlockStack gap="400">
-                    <Text variant="headingMd" as="h2">All Products ({products.length})</Text>
-                    {products.map((product) => {
+                    <Text variant="headingMd" as="h2">Products ({filteredProducts.length})</Text>
+                    {filteredProducts.map((product) => {
                       const isOpen = !!expanded[product.id];
                       const rows = product.variants.nodes.map(v => [v.title, `€${v.price}`]);
                       const isUpdatingThis = updatingProductId === product.id;
