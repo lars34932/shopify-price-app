@@ -2,7 +2,7 @@
 
 client_id = "501da72162135a0dd23e3fd060157fb3"
 name = "price updater"
-application_url = "https://example.com"
+application_url = "https://shopify-price-app.onrender.com"
 embedded = true
 
 [webhooks]
@@ -10,7 +10,14 @@ api_version = "2026-01"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products"
+scopes = "write_products,write_inventory,read_inventory"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [
+  "https://shopify-price-app.onrender.com/auth/callback",
+  "https://shopify-price-app.onrender.com/auth/shopify/callback",
+  "https://shopify-price-app.onrender.com/api/auth/callback"
+]
+
+[build]
+automatically_update_urls_on_dev = false

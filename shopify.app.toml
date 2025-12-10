@@ -2,7 +2,7 @@
 
 client_id = "d4e9b1550107b17f4bec700643f76b66"
 name = "price updater"
-application_url = "https://sneakercircle.nl"
+application_url = "https://shopify-price-app.onrender.com"
 embedded = true
 
 [build]
@@ -26,7 +26,7 @@ scopes = "write_products,write_inventory,read_inventory"
 
 [auth]
 redirect_urls = [
-  "https://sneakercircle.nl/auth/callback",
-  "https://sneakercircle.nl/auth/shopify/callback",
-  "https://sneakercircle.nl/api/auth/callback"
+  "https://shopify-price-app.onrender.com/auth/callback",
+  "https://shopify-price-app.onrender.com/auth/shopify/callback",
+  "https://shopify-price-app.onrender.com/api/auth/callback"
 ]
