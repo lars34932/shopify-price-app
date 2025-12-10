@@ -1,6 +1,7 @@
 import { Outlet, useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
+import { NavMenu } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }) => {
@@ -15,10 +16,10 @@ export default function App() {
 
   return (
     <AppProvider embedded apiKey={apiKey}>
-      <s-app-nav>
-        <s-link href="/app">Import Item</s-link>
-        <s-link href="/app/update_prices">Update Prices</s-link>
-      </s-app-nav>
+      <NavMenu>
+        <a href="/app" rel="home">Import Item</a>
+        <a href="/app/update_prices">Update Prices</a>
+      </NavMenu>
       <Outlet />
     </AppProvider>
   );
