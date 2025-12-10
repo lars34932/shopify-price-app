@@ -245,25 +245,40 @@ async function createShopifyProductFromData(admin, data) {
     }
 
     // --- STEP C: Update SKU & Inventory Tracking ---
-    await Promise.all(matchedVariants.map(async (mv) => {
+    // --- STEP C: Update SKU & Inventory Tracking ---
+    // Serialized to prevent "fetch failed" errors from concurrency
+    for (const mv of matchedVariants) {
         const inventoryItemId = mv.inventoryItem?.id;
-        if (!inventoryItemId) return;
+        if (!inventoryItemId) continue;
 
-        await admin.graphql(
-            `#graphql
-        mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
-          inventoryItemUpdate(id: $id, input: $input) {
-            userErrors { field, message }
-          }
-        }`,
-            {
-                variables: {
-                    id: inventoryItemId,
-                    input: { sku: mv.source.sku, tracked: true }
+        try {
+            const response = await admin.graphql(
+                `#graphql
+            mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
+              inventoryItemUpdate(id: $id, input: $input) {
+                userErrors { field, message }
+              }
+            }`,
+                {
+                    variables: {
+                        id: inventoryItemId,
+                        input: { sku: mv.source.sku, tracked: true }
+                    }
                 }
+            );
+
+            const responseJson = await response.json();
+            const userErrors = responseJson.data?.inventoryItemUpdate?.userErrors;
+
+            if (userErrors && userErrors.length > 0) {
+                console.error(`Failed to update inventory/SKU for variant ${mv.id}:`, userErrors);
             }
-        );
-    }));
+
+        } catch (err) {
+            console.error(`Failed to update inventory for variant ${mv.id}:`, err);
+            // Continue processing other variants even if one fails
+        }
+    }
 
     // --- STEP D: Add to Manual Collection (If applicable) ---
     if (existingCollection && !existingCollection.ruleSet) {
