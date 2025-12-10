@@ -31,14 +31,14 @@ const saveToken = async (tokenData) => {
         // Better: Upsert on a fixed ID if possible, but ID is autoincrement.
         // Simplest: Find first, if exists update, else create.
 
-        const existing = await prisma.stockxCredential.findFirst();
+        const existing = await prisma.stockXCredential.findFirst();
         if (existing) {
-            await prisma.stockxCredential.update({
+            await prisma.stockXCredential.update({
                 where: { id: existing.id },
                 data: data
             });
         } else {
-            await prisma.stockxCredential.create({
+            await prisma.stockXCredential.create({
                 data: {
                     ...data,
                     refreshToken: data.refreshToken || "" // Ensure string if creating
@@ -58,7 +58,7 @@ const loadToken = async () => {
     if (accessToken && refreshToken) return true;
 
     try {
-        const cred = await prisma.stockxCredential.findFirst({
+        const cred = await prisma.stockXCredential.findFirst({
             orderBy: { updatedAt: 'desc' }
         });
 
