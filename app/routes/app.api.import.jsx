@@ -41,6 +41,48 @@ async function createShopifyProductFromData(admin, data) {
     if (!brand || typeof brand !== 'string') {
         console.log("Brand missing or invalid: brand data not found in StockX response.");
     } else {
+        // --- STEP -1: Check for Existing Product (Duplicate Check) ---
+        // We check by Tag (fastest/most accurate for our new imports) OR by Title (fallback for legacy imports)
+        // Note: We'll add the SKU as a tag to new products.
+        const skuToCheck = data.product_info.sku;
+        const titleToCheck = data.product_info.title;
+        // Escape quotes to prevent GraphQL errors
+        const safeSku = skuToCheck.replace(/"/g, '\\"');
+        const safeTitle = titleToCheck.replace(/"/g, '\\"');
+
+        try {
+            const duplicateQuery = await admin.graphql(
+                `#graphql
+              query products($query: String!) {
+                products(first: 1, query: $query) {
+                  edges {
+                    node {
+                      id
+                      title
+                      handle
+                    }
+                  }
+                }
+              }`,
+                {
+                    variables: {
+                        // Query looks for exact tag match OR exact title phrase match
+                        query: `tag:"${safeSku}" OR title:"${safeTitle}"`
+                    }
+                }
+            );
+            const duplicateJson = await duplicateQuery.json();
+            const existingProduct = duplicateJson.data?.products?.edges?.[0]?.node;
+
+            if (existingProduct) {
+                console.log(`Duplicate found: ${existingProduct.title} (ID: ${existingProduct.id})`);
+                return { status: "warning", message: `Product already exists: ${existingProduct.title}` };
+            }
+        } catch (err) {
+            console.error("Duplicate Check Failed:", err);
+            // Non-critical, continue
+        }
+
         // Check if collection exists
         try {
             const collectionQuery = await admin.graphql(
@@ -140,7 +182,7 @@ async function createShopifyProductFromData(admin, data) {
                                 values: sizeValues
                             }
                         ],
-                        tags: ["stockx-sync"]
+                        tags: ["stockx-sync", data.product_info.sku]
                     },
                     media: mediaInput
                 },
