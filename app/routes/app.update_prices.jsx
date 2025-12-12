@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { useLoaderData, useActionData, useNavigation, useSubmit } from "react-router";
+import { useLoaderData, useActionData, useNavigation, useSubmit, useSearchParams } from "react-router";
 import {
   Page,
   Layout,
@@ -185,11 +185,16 @@ export default function UpdatePricesPage() {
   }
 
   // 2. Pagination
+  // Get current page from URL or default to 1
+  const [searchParams] = useSearchParams();
+  const currentPage = parseInt(searchParams.get("page_num") || "1", 10);
+
   const handleNext = () => {
     if (!pageInfo.hasNextPage) return;
     const params = new URLSearchParams(window.location.search);
     params.set("cursor", pageInfo.endCursor);
     params.set("direction", "next");
+    params.set("page_num", currentPage + 1);
     submit(params);
   };
 
@@ -198,6 +203,7 @@ export default function UpdatePricesPage() {
     const params = new URLSearchParams(window.location.search);
     params.set("cursor", pageInfo.startCursor);
     params.set("direction", "prev");
+    params.set("page_num", Math.max(1, currentPage - 1));
     submit(params);
   };
 
@@ -205,6 +211,7 @@ export default function UpdatePricesPage() {
     const params = new URLSearchParams(window.location.search);
     params.delete("cursor");
     params.delete("direction");
+    params.set("page_num", 1);
     submit(params);
   };
 
@@ -363,7 +370,7 @@ export default function UpdatePricesPage() {
                 ) : (
                   <BlockStack gap="400">
                     {/* Pagination Controls Top */}
-                    <InlineStack align="end" gap="200">
+                    <InlineStack align="end" gap="200" blockAlign="center">
                       <Button variant="plain" onClick={handleFirst} disabled={!pageInfo?.hasPreviousPage}>First Page</Button>
                       <Pagination
                         hasPrevious={pageInfo?.hasPreviousPage}
@@ -371,6 +378,7 @@ export default function UpdatePricesPage() {
                         hasNext={pageInfo?.hasNextPage}
                         onNext={handleNext}
                       />
+                      <Text variant="bodyMd" as="span" tone="subdued">Page {currentPage}</Text>
                     </InlineStack>
 
                     <Text variant="headingMd" as="h2">Products (Page View)</Text>
@@ -435,7 +443,7 @@ export default function UpdatePricesPage() {
                     })}
 
                     {/* Pagination Controls Bottom */}
-                    <InlineStack align="center" gap="200">
+                    <InlineStack align="center" gap="200" blockAlign="center">
                       <Button variant="plain" onClick={handleFirst} disabled={!pageInfo?.hasPreviousPage}>First Page</Button>
                       <Pagination
                         hasPrevious={pageInfo?.hasPreviousPage}
@@ -443,6 +451,7 @@ export default function UpdatePricesPage() {
                         hasNext={pageInfo?.hasNextPage}
                         onNext={handleNext}
                       />
+                      <Text variant="bodyMd" as="span" tone="subdued">Page {currentPage}</Text>
                     </InlineStack>
                   </BlockStack>
                 )}
