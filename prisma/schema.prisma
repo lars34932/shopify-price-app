@@ -33,6 +33,7 @@ model Session {
 
 // prisma/schema.prisma
 
+
 model StockXCredential {
   id           Int      @id @default(autoincrement())
   accessToken  String
