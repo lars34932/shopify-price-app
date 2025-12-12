@@ -31,60 +31,6 @@ export const loader = async ({ request }) => {
   const query = url.searchParams.get("query") || "";
   const cursor = url.searchParams.get("cursor");
   const direction = url.searchParams.get("direction") || "next"; // 'next' or 'prev'
-  const mode = url.searchParams.get("mode"); // 'page' (default) or 'all_ids'
-
-  // If mode is 'all_ids', we fetch EVERYTHING matching the query for the client-side bulk processor
-  // WARNING: This can be heavy for large catalogs.
-  if (mode === "all_ids") {
-    let allNodes = [];
-    let hasNext = true;
-    let currentCursor = null;
-
-    while (hasNext) {
-      const q = query ? `tag:stockx-sync AND (title:*${query}* OR sku:*${query}*)` : "tag:stockx-sync";
-
-      const response = await admin.graphql(
-        `#graphql
-        query getAllIds($cursor: String, $query: String) {
-          products(first: 250, after: $cursor, query: $query, sortKey: TITLE) {
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-            nodes {
-              id
-              title
-              initialVariant: variants(first: 1) {
-                nodes {
-                  sku
-                }
-              }
-            }
-          }
-        }`,
-        { variables: { cursor: currentCursor, query: q } }
-      );
-
-      const json = await response.json();
-      const data = json.data.products;
-
-      const simplified = data.nodes.map(n => ({
-        id: n.id,
-        title: n.title,
-        sku: n.initialVariant?.nodes[0]?.sku?.replace(/-[^-]+$/, "") || ""
-      }));
-
-      allNodes = allNodes.concat(simplified);
-
-      if (data.pageInfo.hasNextPage && allNodes.length < 5000) { // Safety limit
-        currentCursor = data.pageInfo.endCursor;
-      } else {
-        hasNext = false;
-      }
-    }
-
-    return { allProducts: allNodes };
-  }
 
   // STANDARD PAGINATION MODE
   const paginationArgs = direction === "prev"
@@ -92,8 +38,6 @@ export const loader = async ({ request }) => {
     : { first: 50, after: cursor };
 
   // Construct search query
-  // Note: Shopify search syntax is specific.
-  // We search in tag:stockx-sync AND (title:*query* OR sku:*query*)
   const searchQuery = query
     ? `tag:stockx-sync AND (title:*${query}* OR sku:*${query}*)`
     : "tag:stockx-sync";
@@ -257,17 +201,30 @@ export default function UpdatePricesPage() {
     submit(params);
   };
 
+  const handleFirst = () => {
+    const params = new URLSearchParams(window.location.search);
+    params.delete("cursor");
+    params.delete("direction");
+    submit(params);
+  };
+
   // 3. Bulk Update Flow
   const handleUpdateAllClick = async () => {
-    // 1. Fetch ALL IDs matching current query
+    // 1. Fetch ALL IDs matching current query from SEPARATE API
     setIsPreparingUpdate(true);
 
     try {
-      // We manually fetch the loader data with specific params
+      // Create params based on current search, but ignoring pagination
       const params = new URLSearchParams(window.location.search);
-      params.set("mode", "all_ids");
+      params.delete("cursor");
+      params.delete("direction");
 
-      const response = await fetch(`${window.location.pathname}?${params.toString()}`);
+      const response = await fetch(`/api/products?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch product list");
+      }
+
       const data = await response.json();
 
       if (data && data.allProducts) {
@@ -354,7 +311,7 @@ export default function UpdatePricesPage() {
       <Page
         title="Update Prices"
         primaryAction={{
-          content: `Update All Matches`,
+          content: `Update All Prices`, // RENAMED
           onAction: handleUpdateAllClick,
           loading: isPreparingUpdate || isUpdating,
           disabled: isNavLoading || isPreparingUpdate || isUpdating
@@ -406,7 +363,8 @@ export default function UpdatePricesPage() {
                 ) : (
                   <BlockStack gap="400">
                     {/* Pagination Controls Top */}
-                    <InlineStack align="end">
+                    <InlineStack align="end" gap="200">
+                      <Button variant="plain" onClick={handleFirst} disabled={!pageInfo?.hasPreviousPage}>First Page</Button>
                       <Pagination
                         hasPrevious={pageInfo?.hasPreviousPage}
                         onPrevious={handlePrev}
@@ -477,7 +435,8 @@ export default function UpdatePricesPage() {
                     })}
 
                     {/* Pagination Controls Bottom */}
-                    <InlineStack align="center">
+                    <InlineStack align="center" gap="200">
+                      <Button variant="plain" onClick={handleFirst} disabled={!pageInfo?.hasPreviousPage}>First Page</Button>
                       <Pagination
                         hasPrevious={pageInfo?.hasPreviousPage}
                         onPrevious={handlePrev}
