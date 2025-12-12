@@ -13,9 +13,11 @@ export function calculateMarkupPrice(basePrice) {
 
     // Round up to nearest 5
     price = Math.ceil(price / 5) * 5;
+    console.log(`[Shopify Sync] Rounded price to: ${price}`);
 
     // Subtract 0.10 to get .90
     price = price - 0.10;
+    console.log(`[Shopify Sync] Subtracted 0.10 to get: ${price}`);
 
     return price.toFixed(2);
 }
