@@ -1,13 +1,13 @@
 export function calculateMarkupPrice(basePrice) {
     let markup = 0;
-    if (basePrice < 100) markup = 80;
-    else if (basePrice < 200) markup = 85;
-    else if (basePrice < 300) markup = 90;
-    else if (basePrice < 400) markup = 95;
-    else if (basePrice < 500) markup = 100;
-    else if (basePrice < 600) markup = 110;
-    else if (basePrice < 700) markup = 120;
-    else markup = 140;
+    if (basePrice < 100) markup = 70;
+    else if (basePrice < 200) markup = 75;
+    else if (basePrice < 300) markup = 80;
+    else if (basePrice < 400) markup = 85;
+    else if (basePrice < 500) markup = 90;
+    else if (basePrice < 600) markup = 100;
+    else if (basePrice < 700) markup = 110;
+    else markup = 130;
 
     let price = basePrice + markup;
 
