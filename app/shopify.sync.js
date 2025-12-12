@@ -28,7 +28,7 @@ export async function updateShopifyProduct(admin, product, stockxData) {
 
         return {
             options: [v.size_eu],
-            price: calculateMarkupPrice(rawPrice),
+            price: rawPrice,
             sku: `${stockxData.product_info.sku}-${v.size_eu.replace(/\s/g, "")}`,
             inventoryManagement: "SHOPIFY"
         };
