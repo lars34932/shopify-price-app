@@ -111,7 +111,12 @@ export const action = async ({ request }) => {
     try {
       const stockxResult = await fetchStockXData(sku, appUrl);
       if (stockxResult.status !== 200) {
-        return { status: "error", message: stockxResult.error || "StockX Fetch Failed" };
+        return {
+          status: "error",
+          message: stockxResult.error || "StockX Fetch Failed",
+          action: stockxResult.action,
+          loginUrl: stockxResult.loginUrl
+        };
       }
 
       const updateResult = await updateShopifyProduct(admin, { id: productId }, stockxResult.data);
@@ -343,6 +348,12 @@ export default function UpdatePricesPage() {
                 {actionData?.status && !isUpdating && (
                   <Banner tone={actionData.status === "success" ? "success" : "critical"}>
                     <p>{actionData.message}</p>
+                    {actionData.action && <p style={{ marginTop: '0.5rem' }}>{actionData.action}</p>}
+                    {actionData.loginUrl && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <Button url={actionData.loginUrl} target="_blank">Login to StockX</Button>
+                      </div>
+                    )}
                   </Banner>
                 )}
 
