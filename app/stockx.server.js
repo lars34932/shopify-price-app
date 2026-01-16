@@ -13,7 +13,7 @@ const TOKEN_PATH = process.platform === 'win32'
 let accessToken = null;
 let refreshToken = null;
 
-import prisma from "./db.server";
+
 
 // ... (constants remain)
 
@@ -21,36 +21,31 @@ import prisma from "./db.server";
 const saveToken = async (tokenData) => {
     try {
         const data = {
-            accessToken: tokenData.access_token,
-            refreshToken: tokenData.refresh_token || undefined, // undefined prevents overwriting with null if missing
+            accessToken: tokenData.access_token || tokenData.accessToken,
+            refreshToken: tokenData.refresh_token || tokenData.refreshToken || undefined,
             expiresIn: tokenData.expires_in,
+            updatedAt: new Date().toISOString()
         };
 
-        // Upsert: Create if not exists, update if exists (we assume ID 1 for simplicity or singleton)
-        // Since we don't have a unique key other than ID, we'll use findFirst/update or deleteMany/create
-        // Better: Upsert on a fixed ID if possible, but ID is autoincrement.
-        // Simplest: Find first, if exists update, else create.
-
-        const existing = await prisma.stockXCredential.findFirst();
-        if (existing) {
-            await prisma.stockXCredential.update({
-                where: { id: existing.id },
-                data: data
-            });
-        } else {
-            await prisma.stockXCredential.create({
-                data: {
-                    ...data,
-                    refreshToken: data.refreshToken || "" // Ensure string if creating
+        // If we are refreshing and didn't get a new refresh token, keep the old one
+        if (!data.refreshToken && fs.existsSync(TOKEN_PATH)) {
+            try {
+                const oldData = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+                if (oldData.refreshToken) {
+                    data.refreshToken = oldData.refreshToken;
                 }
-            });
+            } catch (readErr) {
+                // ignore
+            }
         }
+
+        fs.writeFileSync(TOKEN_PATH, JSON.stringify(data, null, 2));
 
         accessToken = data.accessToken;
         if (data.refreshToken) refreshToken = data.refreshToken;
 
     } catch (e) {
-        console.error("Error saving token to DB:", e);
+        console.error("Error saving token to file:", e);
     }
 };
 
@@ -58,9 +53,10 @@ const loadToken = async () => {
     if (accessToken && refreshToken) return true;
 
     try {
-        const cred = await prisma.stockXCredential.findFirst({
-            orderBy: { updatedAt: 'desc' }
-        });
+        if (!fs.existsSync(TOKEN_PATH)) return false;
+
+        const fileContent = fs.readFileSync(TOKEN_PATH, 'utf8');
+        const cred = JSON.parse(fileContent);
 
         if (cred) {
             accessToken = cred.accessToken;
@@ -68,7 +64,7 @@ const loadToken = async () => {
             return true;
         }
     } catch (e) {
-        console.error("Error loading token from DB:", e);
+        console.error("Error loading token from file:", e);
     }
     return false;
 };
